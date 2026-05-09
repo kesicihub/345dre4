@@ -1,8 +1,8 @@
 --[[
     =========================================================
-    PROJECT: KESICI HUB v26 - BLOX FRUITS (PURE PHYSICS)
+    PROJECT: KESICI HUB v24 - BLOX FRUITS (FINAL SLEEP)
     DEVELOPER: Deniz Kesici
-    FIXES: Removed ALL firetouchinterest calls. Native Physics only.
+    FIXES: Model/Tool Fruit Recognition, 100% Shop Avoidance
     =========================================================
 ]]
 
@@ -28,8 +28,6 @@ local Settings = {
     AutoFarm = false,
     Misc = { Noclip = false }
 }
-
-local IgnoredFruits = {}
 
 -- ==========================================
 -- SMART FLIGHT ENGINE
@@ -68,7 +66,7 @@ local function SmartTween(targetCFrame)
 end
 
 -- ==========================================
--- LITE MENU UI 
+-- LITE MENU UI (HİÇ DOKUNULMADI)
 -- ==========================================
 local KesiciUI = Instance.new("ScreenGui")
 KesiciUI.Name = "KesiciHubLite"
@@ -105,7 +103,7 @@ local Title = Instance.new("TextLabel")
 Title.Size = UDim2.new(1, 0, 0, 30)
 Title.BackgroundColor3 = Color3.fromRGB(0, 150, 255)
 Title.TextColor3 = Color3.fromRGB(255, 255, 255)
-Title.Text = "KESICI HUB - v26"
+Title.Text = "KESICI HUB - v24"
 Title.Font = Enum.Font.GothamBold
 Title.TextSize = 12
 Title.Parent = MainFrame
@@ -156,13 +154,14 @@ task.spawn(function()
     while task.wait(1) do
         for _, v in pairs(Players:GetPlayers()) do if v ~= LocalPlayer and v.Character and v.Character:FindFirstChild("HumanoidRootPart") then local hl = v.Character:FindFirstChild("KesiciESP"); if Settings.PlayerESP then GetHighlight(v.Character, "KesiciESP", Color3.fromRGB(255, 0, 0)) elseif hl then hl:Destroy() end end end
         
+        -- ESP için GetDescendants kalabilir, sadece göstermek için
         for _, obj in pairs(workspace:GetDescendants()) do
             local n = string.lower(obj.Name)
             local hl = obj:FindFirstChild("KesiciObjESP")
             
             if Settings.ChestESP and string.find(n, "chest") then 
                 GetHighlight(obj, "KesiciObjESP", Color3.fromRGB(255, 255, 0))
-            elseif Settings.FruitESP and string.find(n, "fruit") and (obj:IsA("Tool") or obj:IsA("Model")) then 
+            elseif Settings.FruitESP and obj.Parent == workspace and string.find(n, "fruit") then 
                 GetHighlight(obj, "KesiciObjESP", Color3.fromRGB(255, 0, 255))
             elseif hl then 
                 hl:Destroy() 
@@ -171,7 +170,7 @@ task.spawn(function()
     end
 end)
 
--- AUTO CHEST (SAF FİZİK MOTORU)
+-- AUTO CHEST
 task.spawn(function()
     while task.wait(0.5) do
         if Settings.AutoChest and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
@@ -187,8 +186,8 @@ task.spawn(function()
                     while chest and chest.Parent and timeout < 20 and Settings.AutoChest do
                         local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
                         if hrp then 
-                            -- Sandığın tam üstüne ufak titreşimlerle oturarak oyunun doğal dokunma hissini tetikler
-                            hrp.CFrame = chest.CFrame * CFrame.new(math.random(-1, 1) * 0.1, 0, math.random(-1, 1) * 0.1)
+                            hrp.CFrame = chest.CFrame 
+                            pcall(function() firetouchinterest(hrp, chest, 0); firetouchinterest(hrp, chest, 1) end)
                         end 
                         task.wait(0.1)
                         timeout = timeout + 1
@@ -199,50 +198,34 @@ task.spawn(function()
     end
 end)
 
--- AUTO FRUIT SNIPER (SAF FİZİK MOTORU VE SOY AĞACI KORUMASI)
+-- AUTO FRUIT SNIPER (KÖR DEĞİL, SHOP'A GİTMEZ, SADECE YERE DÜŞENLERİ ALIR)
 task.spawn(function()
-    while task.wait(0.5) do
+    while task.wait(1) do
         if Settings.AutoFruit and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
             
-            for _, obj in ipairs(workspace:GetDescendants()) do
+            -- SADECE YERDEKİ EŞYALARA BAKAR (GetChildren) - NPC masasını asla görmez.
+            for _, obj in pairs(workspace:GetChildren()) do
                 if not Settings.AutoFruit then break end
                 
-                if IgnoredFruits[obj] then continue end
-                
-                local name = string.lower(obj.Name)
-                if string.find(name, "fruit") then
-                    local handle = obj:FindFirstChild("Handle") or (obj:IsA("BasePart") and obj)
-                    
-                    if handle and handle:IsA("BasePart") then
-                        -- Shop masalarındaki veya oyuncuların elindeki meyveleri engellemek için güvenlik duvarı
-                        local isSafe = true
-                        local parentCheck = obj.Parent
-                        while parentCheck and parentCheck ~= game do
-                            if parentCheck:FindFirstChild("Humanoid") then
-                                isSafe = false
-                                break
+                -- Hem Model hem Tool olan, isminde fruit geçen objeleri kabul eder
+                if (obj:IsA("Tool") or obj:IsA("Model")) and string.find(string.lower(obj.Name), "fruit") then
+                    local targetPart = obj:FindFirstChild("Handle")
+                    if targetPart then
+                        SmartTween(targetPart.CFrame)
+                        
+                        local timeout = 0
+                        -- Meyve yerdeyken (workspace içindeyken) döngüye devam eder, çantaya girince kopar
+                        while obj and obj.Parent == workspace and timeout < 20 and Settings.AutoFruit do
+                            local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
+                            if hrp then 
+                                hrp.CFrame = targetPart.CFrame
+                                pcall(function() 
+                                    firetouchinterest(hrp, targetPart, 0)
+                                    firetouchinterest(hrp, targetPart, 1)
+                                end)
                             end
-                            parentCheck = parentCheck.Parent
-                        end
-
-                        if isSafe then
-                            SmartTween(handle.CFrame)
-                            
-                            local attempts = 0
-                            while obj and obj.Parent and obj:IsDescendantOf(workspace) and attempts < 25 and Settings.AutoFruit do
-                                local hrp = LocalPlayer.Character:FindFirstChild("HumanoidRootPart")
-                                if hrp then 
-                                    -- firetouchinterest YOK. 
-                                    -- Karakteri meyvenin merkezinde milimetrik olarak hareket ettirip fizik motorunu (Touched event) uyandırıyoruz.
-                                    hrp.CFrame = handle.CFrame * CFrame.new(math.random(-1, 1) * 0.2, 0, math.random(-1, 1) * 0.2)
-                                end
-                                task.wait(0.15)
-                                attempts = attempts + 1
-                            end
-                            
-                            if attempts >= 25 then
-                                IgnoredFruits[obj] = true
-                            end
+                            task.wait(0.25)
+                            timeout = timeout + 1
                         end
                     end
                 end
@@ -252,7 +235,7 @@ task.spawn(function()
     end
 end)
 
--- AUTO FARM (NEAREST MOB)
+-- AUTO FARM (NEAREST MOB) (KUSURSUZ HALİ)
 task.spawn(function()
     while task.wait(0.15) do 
         if Settings.AutoFarm and LocalPlayer.Character and LocalPlayer.Character:FindFirstChild("HumanoidRootPart") then
